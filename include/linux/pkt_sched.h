@@ -452,6 +452,8 @@ struct tc_netem_qopt
 	__u32	gap;		/* re-ordering gap (0 for none) */
 	__u32   duplicate;	/* random packet dup  (0=none ~0=100%) */
 	__u32	jitter;		/* random jitter in latency (us) */
+    __u32   prune_period;
+    __u32   prune_length;
 };
 
 struct tc_netem_corr

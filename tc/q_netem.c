@@ -32,6 +32,7 @@ static void explain(void)
 "                 [ delay TIME [ JITTER [CORRELATION]]]\n" \
 "                 [ distribution {uniform|normal|pareto|paretonormal} ]\n" \
 "                 [ drop PERCENT [CORRELATION]] \n" \
+"                 [ prune PERIOD LENGTH]\n" \
 "                 [ corrupt PERCENT [CORRELATION]] \n" \
 "                 [ duplicate PERCENT [CORRELATION]]\n" \
 "                 [ reorder PRECENT [CORRELATION] [ gap DISTANCE ]]\n");
@@ -185,7 +186,22 @@ static int netem_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 					return -1;
 				}
 			}
-		} else if (matches(*argv, "reorder") == 0) {
+
+        } else if (matches(*argv, "prune") == 0) {
+            NEXT_ARG();
+            if (get_u32(&opt.prune_period, *argv, 0)) {
+                explain1("prune");
+                return -1;
+            }
+            if (NEXT_IS_NUMBER()) {
+                NEXT_ARG();
+                if (get_u32(&opt.prune_length, *argv,0)) {
+                    explain1("prune");
+                    return -1;
+                }
+            }
+
+        } else if (matches(*argv, "reorder") == 0) {
 			NEXT_ARG();
 			present[TCA_NETEM_REORDER] = 1;
 			if (get_percent(&reorder.probability, *argv)) {
@@ -353,6 +369,9 @@ static int netem_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 			fprintf(f, " %s", sprint_percent(cor->loss_corr, b1));
 	}
 
+    if (qopt.prune_period)
+        fprintf(f, " prune {period=%lu, length=%lu}", (unsigned long)qopt.prune_period, (unsigned long)qopt.prune_length);
+    
 	if (qopt.duplicate) {
 		fprintf(f, " duplicate %s",
 			sprint_percent(qopt.duplicate, b1));
