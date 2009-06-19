@@ -35,6 +35,7 @@ static void explain(void)
 "                 [ prune PERIOD LENGTH]\n" \
 "                 [ corrupt PERCENT [CORRELATION]] \n" \
 "                 [ duplicate PERCENT [CORRELATION]]\n" \
+"                 [ detreorder PERIOD DELAY]\n" \
 "                 [ reorder PRECENT [CORRELATION] [ gap DISTANCE ]]\n");
 }
 
@@ -200,6 +201,22 @@ static int netem_parse_opt(struct qdisc_util *qu, int argc, char **argv,
                     return -1;
                 }
             }
+
+        } else if (matches(*argv, "detreorder") == 0) {
+            NEXT_ARG();
+            if (get_u32(&opt.detreorder_period, *argv, 0)) {
+                explain1("detreorder");
+                return -1;
+            }
+            if (NEXT_IS_NUMBER()) {
+                NEXT_ARG();
+                if (get_ticks(&opt.detreorder_delay, *argv)) {
+                    explain1("detreorder");
+                    return -1;
+                }
+            }
+
+
 
         } else if (matches(*argv, "reorder") == 0) {
 			NEXT_ARG();
@@ -371,7 +388,10 @@ static int netem_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 
     if (qopt.prune_period)
         fprintf(f, " prune {period=%lu, length=%lu}", (unsigned long)qopt.prune_period, (unsigned long)qopt.prune_length);
-    
+
+    if (qopt.detreorder_period)
+    fprintf(f, " detreorder {period=%lu, space=%s}", (unsigned long)qopt.detreorder_period, sprint_ticks(qopt.detreorder_delay, b1));
+
 	if (qopt.duplicate) {
 		fprintf(f, " duplicate %s",
 			sprint_percent(qopt.duplicate, b1));
