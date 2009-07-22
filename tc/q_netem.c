@@ -216,8 +216,6 @@ static int netem_parse_opt(struct qdisc_util *qu, int argc, char **argv,
                 }
             }
 
-
-
         } else if (matches(*argv, "reorder") == 0) {
 			NEXT_ARG();
 			present[TCA_NETEM_REORDER] = 1;
@@ -387,10 +385,14 @@ static int netem_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	}
 
     if (qopt.prune_period)
-        fprintf(f, " prune {period=%lu, length=%lu}", (unsigned long)qopt.prune_period, (unsigned long)qopt.prune_length);
+        fprintf(f, " prune {period=%lu, length=%lu}",
+                (unsigned long)qopt.prune_period,
+                (unsigned long)qopt.prune_length);
 
     if (qopt.detreorder_period)
-    fprintf(f, " detreorder {period=%lu, space=%s}", (unsigned long)qopt.detreorder_period, sprint_ticks(qopt.detreorder_delay, b1));
+    fprintf(f, " detreorder {period=%lu, space=%s}",
+            (unsigned long)qopt.detreorder_period,
+            sprint_ticks(qopt.detreorder_delay, b1));
 
 	if (qopt.duplicate) {
 		fprintf(f, " duplicate %s",

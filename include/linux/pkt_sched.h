@@ -453,7 +453,7 @@ struct tc_netem_qopt
 	__u32   duplicate;	/* random packet dup  (0=none ~0=100%) */
 	__u32	jitter;		/* random jitter in latency (us) */
     __u32   detreorder_period;  /* period of deterministic reordering  */
-    __u32   detreorder_delay;  /* delay of the single reordered packet  */
+    __u32   detreorder_delay;   /* delay of the single reordered packet  */
     __u32   prune_period;
     __u32   prune_length;
 };
