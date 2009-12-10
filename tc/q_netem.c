@@ -269,9 +269,6 @@ static int netem_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 	tail = NLMSG_TAIL(n);
 
 	if (reorder.probability) {
-		if (opt.latency == 0) {
-			fprintf(stderr, "reordering not possible without specifying some delay\n");
-		}
 		if (opt.gap == 0)
 			opt.gap = 1;
 	} else if (opt.gap > 0) {
