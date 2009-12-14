@@ -35,7 +35,7 @@ static void explain(void)
 "                 [ corrupt PERCENT [CORRELATION]] \n" \
 "                 [ duplicate PERCENT [CORRELATION]]\n" \
 "                 [ reorder PRECENT [CORRELATION] [ gap DISTANCE ]]\n" \
-"                 [ reorderdelay TIME]\n" \
+"                 [ reorderdelay TIME [JITTER [CORRELATION]]]\n" \
 );
 }
 
@@ -213,7 +213,22 @@ static int netem_parse_opt(struct qdisc_util *qu, int argc, char **argv,
                                 explain1("reorderdelay");
                                 return -1;
                         }
-
+                        if (NEXT_IS_NUMBER()) {
+                                NEXT_ARG();
+                                if (get_ticks(&opt.reorderdelayjitter, *argv)) {
+                                        explain1("reorderdelay");
+                                        return -1;
+                                }
+				if (NEXT_IS_NUMBER()) {
+                                        NEXT_ARG();
+                                        ++present[TCA_NETEM_CORR];
+                                        if (get_percent(&cor.reorderdelay_corr, *argv)) {
+                                                explain1("reorderdelay");
+                                                return -1;
+                                        }
+                                }
+			}
+	
 		} else if (matches(*argv, "corrupt") == 0) {
 			NEXT_ARG();
 			present[TCA_NETEM_CORRUPT] = 1;
