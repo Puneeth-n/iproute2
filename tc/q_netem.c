@@ -34,8 +34,9 @@ static void explain(void)
 "                 [ drop PERCENT [CORRELATION]] \n" \
 "                 [ corrupt PERCENT [CORRELATION]] \n" \
 "                 [ duplicate PERCENT [CORRELATION]]\n" \
+"                 [ reorder PRECENT [CORRELATION] [ gap DISTANCE ]]\n" \
 "                 [ reorderdelay TIME]\n" \
-"                 [ reorder PRECENT [CORRELATION] [ gap DISTANCE ]]\n");
+);
 }
 
 static void explain1(const char *arg)
@@ -271,10 +272,17 @@ static int netem_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 	if (reorder.probability) {
 		if (opt.gap == 0)
 			opt.gap = 1;
-	} else if (opt.gap > 0) {
-		fprintf(stderr, "gap specified without reorder probability\n");
-		explain();
-		return -1;
+	} else {
+		if (opt.gap > 0) {
+			fprintf(stderr, "gap specified without reorder probability\n");
+			explain();
+			return -1;
+		}
+		if ( opt.reorderdelay > 0) {
+			fprintf(stderr, "reorderdelay specified without reorder probaility\n");
+			explain();
+			return -1;
+		}
 	}
 
 	if (dist_data && (opt.latency == 0 || opt.jitter == 0)) {
