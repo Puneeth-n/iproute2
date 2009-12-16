@@ -28,14 +28,13 @@
 static void explain(void)
 {
 	fprintf(stderr,
-"Usage: ... netem [ limit PACKETS ] \n" \
-"                 [ delay TIME [ JITTER [CORRELATION]]]\n" \
-"                 [ distribution {uniform|normal|pareto|paretonormal} ]\n" \
-"                 [ drop PERCENT [CORRELATION]] \n" \
-"                 [ corrupt PERCENT [CORRELATION]] \n" \
-"                 [ duplicate PERCENT [CORRELATION]]\n" \
-"                 [ reorder PRECENT [CORRELATION] [ gap DISTANCE ]]\n" \
-"                 [ reorderdelay TIME [JITTER [CORRELATION]]]\n" \
+"Usage: ... netem [ limit PACKETS ]\n" \
+"                 [ delay TIME [JITTER [CORRELATION]] ]\n" \
+"                 [ distribution (uniform|normal|pareto|paretonormal) ]\n" \
+"                 [ drop PERCENT [CORRELATION] ]\n" \
+"                 [ corrupt PERCENT [CORRELATION] ]\n" \
+"                 [ duplicate PERCENT [CORRELATION] ]\n" \
+"                 [ ( reorder PRECENT [CORRELATION] | gap DISTANCE ) reorderdelay TIME [JITTER [CORRELATION]] ]\n" \
 );
 }
 
@@ -286,15 +285,10 @@ static int netem_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 
 	if (reorder.probability) {
 		if (opt.gap == 0)
-			opt.gap = 1;
+			opt.gap = 1; /* set minimum gap between reorders to 1 */
 	} else {
-		if (opt.gap > 0) {
-			fprintf(stderr, "gap specified without reorder probability\n");
-			explain();
-			return -1;
-		}
-		if ( opt.reorderdelay > 0) {
-			fprintf(stderr, "reorderdelay specified without reorder probaility\n");
+		if ( opt.gap == 0 && opt.reorderdelay > 0) {
+			fprintf(stderr, "reorderdelay specified without reorder probability or gap\n");
 			explain();
 			return -1;
 		}
