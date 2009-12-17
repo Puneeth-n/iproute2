@@ -31,7 +31,7 @@ static void usage(void);
 static void usage(void)
 {
 	fprintf(stderr, "Usage: tc filter [ add | del | change | replace | show ] dev STRING\n");
-	fprintf(stderr, "       [ pref PRIO ] [ protocol PROTO ]\n");
+	fprintf(stderr, "       [ pref PRIO ] protocol PROTO\n");
 	fprintf(stderr, "       [ estimator INTERVAL TIME_CONSTANT ]\n");
 	fprintf(stderr, "       [ root | classid CLASSID ] [ handle FILTERID ]\n");
 	fprintf(stderr, "       [ [ FILTER_TYPE ] [ help | OPTIONS ] ]\n");
@@ -55,6 +55,7 @@ int tc_filter_modify(int cmd, unsigned flags, int argc, char **argv)
 	struct filter_util *q = NULL;
 	__u32 prio = 0;
 	__u32 protocol = 0;
+	int protocol_set = 0;
 	char *fhandle = NULL;
 	char  d[16];
 	char  k[16];
@@ -70,6 +71,9 @@ int tc_filter_modify(int cmd, unsigned flags, int argc, char **argv)
 	req.n.nlmsg_flags = NLM_F_REQUEST|flags;
 	req.n.nlmsg_type = cmd;
 	req.t.tcm_family = AF_UNSPEC;
+
+	if (cmd == RTM_NEWTFILTER && flags & NLM_F_CREATE)
+		protocol = ETH_P_ALL;
 
 	while (argc > 0) {
 		if (strcmp(*argv, "dev") == 0) {
@@ -102,20 +106,22 @@ int tc_filter_modify(int cmd, unsigned flags, int argc, char **argv)
 			if (prio)
 				duparg("priority", *argv);
 			if (get_u32(&prio, *argv, 0))
-				invarg(*argv, "invalid prpriority value");
+				invarg(*argv, "invalid priority value");
 		} else if (matches(*argv, "protocol") == 0) {
 			__u16 id;
 			NEXT_ARG();
-			if (protocol)
+			if (protocol_set)
 				duparg("protocol", *argv);
 			if (ll_proto_a2n(&id, *argv))
 				invarg(*argv, "invalid protocol");
 			protocol = id;
+			protocol_set = 1;
 		} else if (matches(*argv, "estimator") == 0) {
 			if (parse_estimator(&argc, &argv, &est) < 0)
 				return -1;
 		} else if (matches(*argv, "help") == 0) {
 			usage();
+			return 0;
 		} else {
 			strncpy(k, *argv, sizeof(k)-1);
 
@@ -173,6 +179,7 @@ static __u32 filter_parent;
 static int filter_ifindex;
 static __u32 filter_prio;
 static __u32 filter_protocol;
+__u16 f_proto = 0;
 
 int print_filter(const struct sockaddr_nl *who,
 			struct nlmsghdr *n,
@@ -219,13 +226,13 @@ int print_filter(const struct sockaddr_nl *who,
 		}
 	}
 	if (t->tcm_info) {
-		__u32 protocol = TC_H_MIN(t->tcm_info);
+		f_proto = TC_H_MIN(t->tcm_info);
 		__u32 prio = TC_H_MAJ(t->tcm_info)>>16;
-		if (!filter_protocol || filter_protocol != protocol) {
-			if (protocol) {
+		if (!filter_protocol || filter_protocol != f_proto) {
+			if (f_proto) {
 				SPRINT_BUF(b1);
 				fprintf(fp, "protocol %s ",
-					ll_proto_n2a(protocol, b1, sizeof(b1)));
+					ll_proto_n2a(f_proto, b1, sizeof(b1)));
 			}
 		}
 		if (!filter_prio || filter_prio != prio) {

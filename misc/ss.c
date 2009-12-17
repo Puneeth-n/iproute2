@@ -33,9 +33,8 @@
 #include "libnetlink.h"
 #include "SNAPSHOT.h"
 
+#include <netinet/tcp.h>
 #include <linux/inet_diag.h>
-#include <linux/tcp.h>
-#include <net/tcp_states.h>
 
 int resolve_hosts = 0;
 int resolve_services = 1;
@@ -421,7 +420,7 @@ const char *print_ms_timer(int timeout)
 
 const char *print_hz_timer(int timeout)
 {
-	int hz = get_hz();
+	int hz = get_user_hz();
 	return print_ms_timer(((timeout*1000) + hz-1)/hz);
 }
 
@@ -1192,10 +1191,11 @@ static int tcp_show_line(char *line, const struct filter *f, int family)
 		}
 	}
 	if (show_tcpinfo) {
-		if (s.rto && s.rto != 3*get_hz())
-			printf(" rto:%g", (double)s.rto/get_hz());
+		int hz = get_user_hz();
+		if (s.rto && s.rto != 3*hz)
+			printf(" rto:%g", (double)s.rto/hz);
 		if (s.ato)
-			printf(" ato:%g", (double)s.ato/get_hz());
+			printf(" ato:%g", (double)s.ato/hz);
 		if (s.cwnd != 2)
 			printf(" cwnd:%d", s.cwnd);
 		if (s.ssthresh != -1)
@@ -1503,6 +1503,7 @@ static int tcp_show_netlink(struct filter *f, FILE *dump_fp, int socktype)
 		h = (struct nlmsghdr*)buf;
 		while (NLMSG_OK(h, status)) {
 			int err;
+			struct inet_diag_msg *r = NLMSG_DATA(h);
 
 			if (/*h->nlmsg_pid != rth->local.nl_pid ||*/
 			    h->nlmsg_seq != 123456)
@@ -1521,6 +1522,10 @@ static int tcp_show_netlink(struct filter *f, FILE *dump_fp, int socktype)
 				return 0;
 			}
 			if (!dump_fp) {
+				if (!(f->families & (1<<r->idiag_family))) {
+					h = NLMSG_NEXT(h, status);
+					continue;
+				}
 				err = tcp_show_sock(h, NULL);
 				if (err < 0)
 					return err;
@@ -1642,7 +1647,7 @@ static int tcp_show(struct filter *f, int socktype)
 	}
 
 	if (f->families & (1<<AF_INET)) {
-		if ((fp = net_tcp_open()) < 0)
+		if ((fp = net_tcp_open()) == NULL)
 			goto outerr;
 
 		setbuffer(fp, buf, bufsize);
@@ -1652,7 +1657,7 @@ static int tcp_show(struct filter *f, int socktype)
 	}
 
 	if ((f->families & (1<<AF_INET6)) &&
-	    (fp = net_tcp6_open()) >= 0) {
+	    (fp = net_tcp6_open()) != NULL) {
 		setbuffer(fp, buf, bufsize);
 		if (generic_record_read(fp, tcp_show_line, f, AF_INET6))
 			goto outerr;
@@ -1774,7 +1779,7 @@ int udp_show(struct filter *f)
 	dg_proto = UDP_PROTO;
 
 	if (f->families&(1<<AF_INET)) {
-		if ((fp = net_udp_open()) < 0)
+		if ((fp = net_udp_open()) == NULL)
 			goto outerr;
 		if (generic_record_read(fp, dgram_show_line, f, AF_INET))
 			goto outerr;
@@ -1782,7 +1787,7 @@ int udp_show(struct filter *f)
 	}
 
 	if ((f->families&(1<<AF_INET6)) &&
-	    (fp = net_udp6_open()) >= 0) {
+	    (fp = net_udp6_open()) != NULL) {
 		if (generic_record_read(fp, dgram_show_line, f, AF_INET6))
 			goto outerr;
 		fclose(fp);
@@ -1806,7 +1811,7 @@ int raw_show(struct filter *f)
 	dg_proto = RAW_PROTO;
 
 	if (f->families&(1<<AF_INET)) {
-		if ((fp = net_raw_open()) < 0)
+		if ((fp = net_raw_open()) == NULL)
 			goto outerr;
 		if (generic_record_read(fp, dgram_show_line, f, AF_INET))
 			goto outerr;
@@ -1814,7 +1819,7 @@ int raw_show(struct filter *f)
 	}
 
 	if ((f->families&(1<<AF_INET6)) &&
-	    (fp = net_raw6_open()) >= 0) {
+	    (fp = net_raw6_open()) != NULL) {
 		if (generic_record_read(fp, dgram_show_line, f, AF_INET6))
 			goto outerr;
 		fclose(fp);
@@ -2622,9 +2627,7 @@ int main(int argc, char *argv[])
 		int mask2;
 		if (preferred_family == AF_INET ||
 		    preferred_family == AF_INET6) {
-			mask2= (1<<TCP_DB);
-			if (!do_default)
-				mask2 = (1<<UDP_DB)|(1<<RAW_DB);
+			mask2= current_filter.dbs;
 		} else if (preferred_family == AF_PACKET) {
 			mask2 = PACKET_DBM;
 		} else if (preferred_family == AF_UNIX) {

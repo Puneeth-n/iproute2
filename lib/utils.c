@@ -47,6 +47,41 @@ int get_integer(int *val, const char *arg, int base)
 	return 0;
 }
 
+int mask2bits(__u32 netmask)
+{
+	unsigned bits = 0;
+	__u32 mask = ntohl(netmask);
+	__u32 host = ~mask;
+
+	/* a valid netmask must be 2^n - 1 */
+	if ((host & (host + 1)) != 0)
+		return -1;
+
+	for (; mask; mask <<= 1)
+		++bits;
+	return bits;
+}
+
+static int get_netmask(unsigned *val, const char *arg, int base)
+{
+	inet_prefix addr;
+
+	if (!get_unsigned(val, arg, base))
+		return 0;
+
+	/* try coverting dotted quad to CIDR */
+	if (!get_addr_1(&addr, arg, AF_INET) && addr.family == AF_INET) {
+		int b = mask2bits(addr.data[0]);
+		
+		if (b >= 0) {
+			*val = b;
+			return 0;
+		}
+	}
+
+	return -1;
+}
+
 int get_unsigned(unsigned *val, const char *arg, int base)
 {
 	unsigned long res;
@@ -209,12 +244,39 @@ int get_s8(__s8 *val, const char *arg, int base)
 	return 0;
 }
 
-int get_addr_1(inet_prefix *addr, const char *name, int family)
+/* This uses a non-standard parsing (ie not inet_aton, or inet_pton)
+ * because of legacy choice to parse 10.8 as 10.8.0.0 not 10.0.0.8
+ */
+static int get_addr_ipv4(__u8 *ap, const char *cp)
 {
-	const char *cp;
-	unsigned char *ap = (unsigned char*)addr->data;
 	int i;
 
+	for (i = 0; i < 4; i++) {
+		unsigned long n;
+		char *endp;
+		
+		n = strtoul(cp, &endp, 0);
+		if (n > 255)
+			return -1;	/* bogus network value */
+
+		if (endp == cp) /* no digits */
+			return -1;
+
+		ap[i] = n;
+
+		if (*endp == '\0')
+			break;
+
+		if (i == 3 || *endp != '.')
+			return -1; 	/* extra characters */
+		cp = endp + 1;
+	}
+
+	return 1;
+}
+
+int get_addr_1(inet_prefix *addr, const char *name, int family)
+{
 	memset(addr, 0, sizeof(*addr));
 
 	if (strcmp(name, "default") == 0 ||
@@ -253,17 +315,12 @@ int get_addr_1(inet_prefix *addr, const char *name, int family)
 	addr->family = AF_INET;
 	if (family != AF_UNSPEC && family != AF_INET)
 		return -1;
+
+	if (get_addr_ipv4((__u8 *)addr->data, name) <= 0)
+		return -1;
+
 	addr->bytelen = 4;
 	addr->bitlen = -1;
-	for (cp=name, i=0; *cp; cp++) {
-		if (*cp <= '9' && *cp >= '0') {
-			ap[i] = 10*ap[i] + (*cp-'0');
-			continue;
-		}
-		if (*cp == '.' && ++i <= 3)
-			continue;
-		return -1;
-	}
 	return 0;
 }
 
@@ -304,7 +361,8 @@ int get_prefix_1(inet_prefix *dst, char *arg, int family)
 				dst->bitlen = 32;
 		}
 		if (slash) {
-			if (get_unsigned(&plen, slash+1, 0) || plen > dst->bitlen) {
+			if (get_netmask(&plen, slash+1, 0)
+					|| plen > dst->bitlen) {
 				err = -1;
 				goto done;
 			}
@@ -482,13 +540,14 @@ const char *rt_addr_n2a(int af, int len, const void *addr, char *buf, int buflen
 struct namerec
 {
 	struct namerec *next;
+	const char *name;
 	inet_prefix addr;
-	char	    *name;
 };
 
-static struct namerec *nht[256];
+#define NHASH 257
+static struct namerec *nht[NHASH];
 
-char *resolve_address(const char *addr, int len, int af)
+static const char *resolve_address(const void *addr, int len, int af)
 {
 	struct namerec *n;
 	struct hostent *h_ent;
@@ -503,7 +562,7 @@ char *resolve_address(const char *addr, int len, int af)
 		len = 4;
 	}
 
-	hash = addr[len-1] ^ addr[len-2] ^ addr[len-3] ^ addr[len-4];
+	hash = *(__u32 *)(addr + len - 4) % NHASH;
 
 	for (n = nht[hash]; n; n = n->next) {
 		if (n->addr.family == af &&
@@ -537,7 +596,8 @@ const char *format_host(int af, int len, const void *addr,
 {
 #ifdef RESOLVE_HOSTNAMES
 	if (resolve_hosts) {
-		char *n;
+		const char *n;
+
 		if (len <= 0) {
 			switch (af) {
 			case AF_INET:
@@ -642,9 +702,9 @@ int print_timestamp(FILE *fp)
 int cmdlineno;
 
 /* Like glibc getline but handle continuation lines and comments */
-size_t getcmdline(char **linep, size_t *lenp, FILE *in)
+ssize_t getcmdline(char **linep, size_t *lenp, FILE *in)
 {
-	size_t cc;
+	ssize_t cc;
 	char *cp;
 
 	if ((cc = getline(linep, lenp, in)) < 0)
@@ -672,9 +732,11 @@ size_t getcmdline(char **linep, size_t *lenp, FILE *in)
 		if (cp)
 			*cp = '\0';
 
-		*linep = realloc(*linep, strlen(*linep) + strlen(line1) + 1);
+		*lenp = strlen(*linep) + strlen(line1) + 1;
+		*linep = realloc(*linep, *lenp);
 		if (!*linep) {
 			fprintf(stderr, "Out of memory\n");
+			*lenp = 0;
 			return -1;
 		}
 		cc += cc1 - 2;

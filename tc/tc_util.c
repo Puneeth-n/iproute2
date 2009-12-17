@@ -24,13 +24,17 @@
 #include "utils.h"
 #include "tc_util.h"
 
+#ifndef LIBDIR
+#define LIBDIR "/usr/lib/"
+#endif
+
 const char *get_tc_lib(void)
 {
 	const char *lib_dir;
 
 	lib_dir = getenv("TC_LIB_DIR");
 	if (!lib_dir)
-		lib_dir = "/usr/lib/tc";
+		lib_dir = LIBDIR "/tc/";
 
 	return lib_dir;
 }
@@ -433,6 +437,47 @@ int action_a2n(char *arg, int *result)
 	}
 	*result = res;
 	return 0;
+}
+
+int get_linklayer(unsigned *val, const char *arg)
+{
+	int res;
+
+	if (matches(arg, "ethernet") == 0)
+		res = LINKLAYER_ETHERNET;
+	else if (matches(arg, "atm") == 0)
+		res = LINKLAYER_ATM;
+	else if (matches(arg, "adsl") == 0)
+		res = LINKLAYER_ATM;
+	else
+		return -1; /* Indicate error */
+
+	*val = res;
+	return 0;
+}
+
+void print_linklayer(char *buf, int len, unsigned linklayer)
+{
+	switch (linklayer) {
+	case LINKLAYER_UNSPEC:
+		snprintf(buf, len, "%s", "unspec");
+		return;
+	case LINKLAYER_ETHERNET:
+		snprintf(buf, len, "%s", "ethernet");
+		return;
+	case LINKLAYER_ATM:
+		snprintf(buf, len, "%s", "atm");
+		return;
+	default:
+		snprintf(buf, len, "%s", "unknown");
+		return;
+	}
+}
+
+char *sprint_linklayer(unsigned linklayer, char *buf)
+{
+	print_linklayer(buf, SPRINT_BSIZE-1, linklayer);
+	return buf;
 }
 
 void print_tm(FILE * f, const struct tcf_t *tm)

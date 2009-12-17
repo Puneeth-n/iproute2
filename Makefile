@@ -1,13 +1,14 @@
-DESTDIR=
-SBINDIR=/usr/sbin
+DESTDIR=/usr/
+LIBDIR=/usr/lib/
+SBINDIR=/sbin
 CONFDIR=/etc/iproute2
-DOCDIR=/usr/share/doc/iproute2
-MANDIR=/usr/share/man
+DOCDIR=/share/doc/iproute2
+MANDIR=/share/man
 
 # Path to db_185.h include
 DBM_INCLUDE:=/usr/include
 
-DEFINES= -DRESOLVE_HOSTNAMES
+DEFINES= -DRESOLVE_HOSTNAMES -DLIBDIR=\"$(LIBDIR)\"
 
 #options if you have a bind>=4.9.4 libresolv (or, maybe, glibc)
 LDLIBS=-lresolv
@@ -56,8 +57,13 @@ install: all
 	ln -sf lnstat.8  $(DESTDIR)$(MANDIR)/man8/rtstat.8
 	ln -sf lnstat.8  $(DESTDIR)$(MANDIR)/man8/ctstat.8
 	ln -sf rtacct.8  $(DESTDIR)$(MANDIR)/man8/nstat.8
+	ln -sf routel.8  $(DESTDIR)$(MANDIR)/man8/routef.8
 	install -m 0755 -d $(DESTDIR)$(MANDIR)/man3
 	install -m 0644 $(shell find man/man3 -maxdepth 1 -type f) $(DESTDIR)$(MANDIR)/man3
+
+snapshot:
+	echo "static const char SNAPSHOT[] = \""`date +%y%m%d`"\";" \
+		> include/SNAPSHOT.h
 
 clean:
 	rm -f cscope.*

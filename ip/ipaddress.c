@@ -20,6 +20,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
+#include <sys/errno.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
@@ -33,6 +34,8 @@
 #include "utils.h"
 #include "ll_map.h"
 #include "ip_common.h"
+
+#define MAX_ROUNDS 10
 
 static struct
 {
@@ -114,7 +117,20 @@ void print_link_flags(FILE *fp, unsigned flags, unsigned mdown)
 	fprintf(fp, "> ");
 }
 
-void print_queuelen(char *name)
+static const char *oper_states[] = {
+	"UNKNOWN", "NOTPRESENT", "DOWN", "LOWERLAYERDOWN", 
+	"TESTING", "DORMANT",	 "UP"
+};
+
+static void print_operstate(FILE *f, __u8 state)
+{
+	if (state >= sizeof(oper_states)/sizeof(oper_states[0]))
+		fprintf(f, "state %#x ", state);
+	else
+		fprintf(f, "state %s ", oper_states[state]);
+}
+
+static void print_queuelen(FILE *f, const char *name)
 {
 	struct ifreq ifr;
 	int s;
@@ -126,14 +142,14 @@ void print_queuelen(char *name)
 	memset(&ifr, 0, sizeof(ifr));
 	strcpy(ifr.ifr_name, name);
 	if (ioctl(s, SIOCGIFTXQLEN, &ifr) < 0) {
-		perror("SIOCGIFXQLEN");
+		fprintf(f, "ioctl(SIOCGIFXQLEN) failed: %s\n", strerror(errno));
 		close(s);
 		return;
 	}
 	close(s);
 
 	if (ifr.ifr_qlen)
-		printf("qlen %d", ifr.ifr_qlen);
+		fprintf(f, "qlen %d", ifr.ifr_qlen);
 }
 
 static void print_linktype(FILE *fp, struct rtattr *tb)
@@ -233,8 +249,11 @@ int print_linkinfo(const struct sockaddr_nl *who,
 		fprintf(fp, "master %s ", ll_idx_n2a(*(int*)RTA_DATA(tb[IFLA_MASTER]), b1));
 	}
 #endif
+	if (tb[IFLA_OPERSTATE])
+		print_operstate(fp, *(__u8 *)RTA_DATA(tb[IFLA_OPERSTATE]));
+		
 	if (filter.showqueue)
-		print_queuelen((char*)RTA_DATA(tb[IFLA_IFNAME]));
+		print_queuelen(fp, (char*)RTA_DATA(tb[IFLA_IFNAME]));
 
 	if (!filter.family || filter.family == AF_PACKET) {
 		SPRINT_BUF(b1);
@@ -261,6 +280,10 @@ int print_linkinfo(const struct sockaddr_nl *who,
 
 	if (do_link && tb[IFLA_LINKINFO] && show_details)
 		print_linktype(fp, tb[IFLA_LINKINFO]);
+
+	if (do_link && tb[IFLA_IFALIAS])
+		fprintf(fp,"\n    alias %s", 
+			(const char *) RTA_DATA(tb[IFLA_IFALIAS]));
 
 	if (do_link && tb[IFLA_STATS] && show_stats) {
 		struct rtnl_link_stats slocal;
@@ -316,8 +339,8 @@ int print_linkinfo(const struct sockaddr_nl *who,
 
 static int flush_update(void)
 {
-	if (rtnl_send(&rth, filter.flushb, filter.flushp) < 0) {
-		perror("Failed to send flush request\n");
+	if (rtnl_send_check(&rth, filter.flushb, filter.flushp) < 0) {
+		perror("Failed to send flush request");
 		return -1;
 	}
 	filter.flushp = 0;
@@ -340,6 +363,7 @@ int print_addrinfo(const struct sockaddr_nl *who, struct nlmsghdr *n,
 	FILE *fp = (FILE*)arg;
 	struct ifaddrmsg *ifa = NLMSG_DATA(n);
 	int len = n->nlmsg_len;
+	int deprecated = 0;
 	struct rtattr * rta_tb[IFA_MAX+1];
 	char abuf[256];
 	SPRINT_BUF(b1);
@@ -469,6 +493,7 @@ int print_addrinfo(const struct sockaddr_nl *who, struct nlmsghdr *n,
 	}
 	if (ifa->ifa_flags&IFA_F_DEPRECATED) {
 		ifa->ifa_flags &= ~IFA_F_DEPRECATED;
+		deprecated = 1;
 		fprintf(fp, "deprecated ");
 	}
 	if (ifa->ifa_flags&IFA_F_HOMEADDRESS) {
@@ -497,9 +522,14 @@ int print_addrinfo(const struct sockaddr_nl *who, struct nlmsghdr *n,
 			sprintf(buf, "valid_lft %usec", ci->ifa_valid);
 		if (ci->ifa_prefered == INFINITY_LIFE_TIME)
 			sprintf(buf+strlen(buf), " preferred_lft forever");
-		else
-			sprintf(buf+strlen(buf), " preferred_lft %usec",
-				ci->ifa_prefered);
+		else {
+			if (deprecated)
+				sprintf(buf+strlen(buf), " preferred_lft %dsec",
+					ci->ifa_prefered);
+			else
+				sprintf(buf+strlen(buf), " preferred_lft %usec",
+					ci->ifa_prefered);
+		}
 		fprintf(fp, "       %s", buf);
 	}
 	fprintf(fp, "\n");
@@ -514,7 +544,7 @@ struct nlmsg_list
 	struct nlmsghdr	  h;
 };
 
-int print_selected_addrinfo(int ifindex, struct nlmsg_list *ainfo, FILE *fp)
+static int print_selected_addrinfo(int ifindex, struct nlmsg_list *ainfo, FILE *fp)
 {
 	for ( ;ainfo ;  ainfo = ainfo->next) {
 		struct nlmsghdr *n = &ainfo->h;
@@ -557,7 +587,7 @@ static int store_nlmsg(const struct sockaddr_nl *who, struct nlmsghdr *n,
 	return 0;
 }
 
-int ipaddr_list_or_flush(int argc, char **argv, int flush)
+static int ipaddr_list_or_flush(int argc, char **argv, int flush)
 {
 	struct nlmsg_list *linfo = NULL;
 	struct nlmsg_list *ainfo = NULL;
@@ -667,7 +697,7 @@ int ipaddr_list_or_flush(int argc, char **argv, int flush)
 		filter.flushp = 0;
 		filter.flushe = sizeof(flushb);
 
-		for (;;) {
+		while (round < MAX_ROUNDS) {
 			if (rtnl_wilddump_request(&rth, filter.family, RTM_GETADDR) < 0) {
 				perror("Cannot send dump request");
 				exit(1);
@@ -678,10 +708,12 @@ int ipaddr_list_or_flush(int argc, char **argv, int flush)
 				exit(1);
 			}
 			if (filter.flushed == 0) {
-				if (round == 0) {
-					fprintf(stderr, "Nothing to flush.\n");
-				} else if (show_stats)
-					printf("*** Flush is complete after %d round%s ***\n", round, round>1?"s":"");
+				if (show_stats) {
+					if (round == 0)
+						printf("Nothing to flush.\n");
+					else 
+						printf("*** Flush is complete after %d round%s ***\n", round, round>1?"s":"");
+				}
 				fflush(stdout);
 				return 0;
 			}
@@ -694,6 +726,8 @@ int ipaddr_list_or_flush(int argc, char **argv, int flush)
 				fflush(stdout);
 			}
 		}
+		fprintf(stderr, "*** Flush remains incomplete after %d rounds. ***\n", MAX_ROUNDS); fflush(stderr);
+		return 1;
 	}
 
 	if (filter.family != AF_PACKET) {
@@ -795,7 +829,7 @@ void ipaddr_reset_filter(int oneline)
 	filter.oneline = oneline;
 }
 
-int default_scope(inet_prefix *lcl)
+static int default_scope(inet_prefix *lcl)
 {
 	if (lcl->family == AF_INET) {
 		if (lcl->bytelen >= 1 && *(__u8*)&lcl->data == 127)
@@ -804,7 +838,7 @@ int default_scope(inet_prefix *lcl)
 	return 0;
 }
 
-int ipaddr_modify(int cmd, int flags, int argc, char **argv)
+static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 {
 	struct {
 		struct nlmsghdr 	n;
@@ -1019,7 +1053,7 @@ int do_ipaddr(int argc, char **argv)
 		return ipaddr_list_or_flush(argc-1, argv+1, 1);
 	if (matches(*argv, "help") == 0)
 		usage();
-	fprintf(stderr, "Command \"%s\" is unknown, try \"ip address help\".\n", *argv);
+	fprintf(stderr, "Command \"%s\" is unknown, try \"ip addr help\".\n", *argv);
 	exit(-1);
 }
 

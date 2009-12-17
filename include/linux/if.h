@@ -21,8 +21,10 @@
 
 #include <linux/types.h>		/* for "__kernel_caddr_t" et al	*/
 #include <linux/socket.h>		/* for "struct sockaddr" et al	*/
+		/* for "__user" et al           */
 
 #define	IFNAMSIZ	16
+#define	IFALIASZ	256
 #include <linux/hdlc/ioctl.h>
 
 /* Standard interface flags (netdevice->flags). */
@@ -49,7 +51,9 @@
 #define IFF_LOWER_UP	0x10000		/* driver signals L1 up		*/
 #define IFF_DORMANT	0x20000		/* driver signals dormant	*/
 
-#define IFF_VOLATILE	(IFF_LOOPBACK|IFF_POINTOPOINT|IFF_BROADCAST|\
+#define IFF_ECHO	0x40000		/* echo sent packets		*/
+
+#define IFF_VOLATILE	(IFF_LOOPBACK|IFF_POINTOPOINT|IFF_BROADCAST|IFF_ECHO|\
 		IFF_MASTER|IFF_SLAVE|IFF_RUNNING|IFF_LOWER_UP|IFF_DORMANT)
 
 /* Private (from user) interface flags (netdevice->priv_flags). */
@@ -60,6 +64,8 @@
 #define IFF_MASTER_ALB	0x10		/* bonding master, balance-alb.	*/
 #define IFF_BONDING	0x20		/* bonding master or slave	*/
 #define IFF_SLAVE_NEEDARP 0x40		/* need ARPs for validation	*/
+#define IFF_ISATAP	0x80		/* ISATAP interface (RFC4214)	*/
+#define IFF_MASTER_ARPMON 0x100		/* bonding master, ARP mon in use */
 
 #define IF_GET_IFACE	0x0001		/* for querying only */
 #define IF_GET_PROTO	0x0002
@@ -132,15 +138,15 @@ struct if_settings
 	unsigned int size;	/* Size of the data allocated by the caller */
 	union {
 		/* {atm/eth/dsl}_settings anyone ? */
-		raw_hdlc_proto	 *raw_hdlc;
-		cisco_proto	 *cisco;
-		fr_proto	 *fr;
-		fr_proto_pvc	 *fr_pvc;
-		fr_proto_pvc_info *fr_pvc_info;
+		raw_hdlc_proto		*raw_hdlc;
+		cisco_proto		*cisco;
+		fr_proto		*fr;
+		fr_proto_pvc		*fr_pvc;
+		fr_proto_pvc_info	*fr_pvc_info;
 
 		/* interface settings */
-		sync_serial_settings *sync;
-		te1_settings	 *te1;
+		sync_serial_settings	*sync;
+		te1_settings		*te1;
 	} ifs_ifsu;
 };
 

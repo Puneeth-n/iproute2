@@ -16,6 +16,7 @@
 #include <arpa/inet.h>
 #include <linux/if.h>
 #include <iptables.h>
+#include <linux/netfilter.h>
 #include <linux/netfilter_ipv4/ip_tables.h>
 #include "utils.h"
 #include "tc_util.h"
@@ -66,6 +67,13 @@ register_target(struct iptables_target *me)
 	me->next = t_list;
 	t_list = me;
 
+}
+
+void
+xtables_register_target(struct iptables_target *me)
+{
+	me->next = t_list;
+	t_list = me;
 }
 
 void
@@ -154,10 +162,10 @@ int string_to_number(const char *s, unsigned int min, unsigned int max,
 	return result;
 }
 
-static void free_opts(struct option *opts)
+static void free_opts(struct option *local_opts)
 {
-	if (opts != original_opts) {
-		free(opts);
+	if (local_opts != original_opts) {
+		free(local_opts);
 		opts = original_opts;
 		global_option_offset = 0;
 	}
@@ -248,14 +256,28 @@ get_target_name(const char *name)
 		}
 	}
 
-	sprintf(path,  "%s/libipt_%s.so",lib_dir, new_name);
+	/* try libxt_xx first */
+	sprintf(path, "%s/libxt_%s.so", lib_dir, new_name);
 	handle = dlopen(path, RTLD_LAZY);
 	if (!handle) {
-		sprintf(path, lib_dir, "/libipt_%s.so", lname);
+		/* try libipt_xx next */
+		sprintf(path, "%s/libipt_%s.so", lib_dir, new_name);
 		handle = dlopen(path, RTLD_LAZY);
+
+		if (!handle) {
+			sprintf(path, "%s/libxt_%s.so", lib_dir , lname);
+			handle = dlopen(path, RTLD_LAZY);
+		}
+
+		if (!handle) {
+			sprintf(path, "%s/libipt_%s.so", lib_dir , lname);
+			handle = dlopen(path, RTLD_LAZY);
+		}
+		/* ok, lets give up .. */
 		if (!handle) {
 			fputs(dlerror(), stderr);
 			printf("\n");
+			free(new_name);
 			return NULL;
 		}
 	}
@@ -271,12 +293,14 @@ get_target_name(const char *name)
 					fputs(error, stderr);
 					fprintf(stderr, "\n");
 					dlclose(handle);
+					free(new_name);
 					return NULL;
 				}
 			}
 		}
 	}
 
+	free(new_name);
 	return m;
 }
 
@@ -491,8 +515,15 @@ static int parse_ipt(struct action_util *a,int *argc_p,
 	*argc_p = rargc - iargc;
 	*argv_p = argv;
 
-	optind = 1;
+	optind = 0;
 	free_opts(opts);
+	/* Clear flags if target will be used again */
+        m->tflags=0;
+        m->used=0;
+	/* Free allocated memory */
+        if (m->t)
+            free(m->t);
+
 
 	return 0;
 

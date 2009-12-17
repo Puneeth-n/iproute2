@@ -87,8 +87,8 @@ int nud_state_a2n(unsigned *state, char *arg)
 
 static int flush_update(void)
 {
-	if (rtnl_send(&rth, filter.flushb, filter.flushp) < 0) {
-		perror("Failed to send flush request\n");
+	if (rtnl_send_check(&rth, filter.flushb, filter.flushp) < 0) {
+		perror("Failed to send flush request");
 		return -1;
 	}
 	filter.flushp = 0;
@@ -272,10 +272,9 @@ int print_neigh(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 		fprintf(fp, " router");
 	}
 	if (tb[NDA_CACHEINFO] && show_stats) {
-		static int hz;
 		struct nda_cacheinfo *ci = RTA_DATA(tb[NDA_CACHEINFO]);
-		if (!hz)
-			hz = get_hz();
+		int hz = get_user_hz();
+
 		if (ci->ndm_refcnt)
 			printf(" ref %d", ci->ndm_refcnt);
 		fprintf(fp, " used %d/%d/%d", ci->ndm_used/hz,
@@ -403,10 +402,12 @@ int do_show_or_flush(int argc, char **argv, int flush)
 				exit(1);
 			}
 			if (filter.flushed == 0) {
-				if (round == 0) {
-					fprintf(stderr, "Nothing to flush.\n");
-				} else if (show_stats)
-					printf("*** Flush is complete after %d round%s ***\n", round, round>1?"s":"");
+				if (show_stats) {
+					if (round == 0)
+						printf("Nothing to flush.\n");
+					else
+						printf("*** Flush is complete after %d round%s ***\n", round, round>1?"s":"");
+				}
 				fflush(stdout);
 				return 0;
 			}

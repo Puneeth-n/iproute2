@@ -41,7 +41,7 @@ static void explain(void)
 		" burst    max bytes burst which can be accumulated during idle period {computed}\n"
 		" mpu      minimum packet size used in rate computations\n"
 		" overhead per-packet size overhead used in rate computations\n"
-
+		" linklay  adapting to a linklayer e.g. atm\n"
 		" ceil     definite upper class rate (no borrows) {rate}\n"
 		" cburst   burst but for ceil {computed}\n"
 		" mtu      max packet size we create rate map for {1600}\n"
@@ -107,8 +107,10 @@ static int htb_parse_class_opt(struct qdisc_util *qu, int argc, char **argv, str
 	__u32 rtab[256],ctab[256];
 	unsigned buffer=0,cbuffer=0;
 	int cell_log=-1,ccell_log = -1;
-	unsigned mtu, mpu;
-	unsigned char mpu8 = 0, overhead = 0;
+	unsigned mtu;
+	unsigned short mpu = 0;
+	unsigned short overhead = 0;
+	unsigned int linklayer  = LINKLAYER_ETHERNET; /* Assume ethernet */
 	struct rtattr *tail;
 
 	memset(&opt, 0, sizeof(opt)); mtu = 1600; /* eth packet len */
@@ -127,13 +129,18 @@ static int htb_parse_class_opt(struct qdisc_util *qu, int argc, char **argv, str
 			}
 		} else if (matches(*argv, "mpu") == 0) {
 			NEXT_ARG();
-			if (get_u8(&mpu8, *argv, 10)) {
+			if (get_u16(&mpu, *argv, 10)) {
 				explain1("mpu"); return -1;
 			}
 		} else if (matches(*argv, "overhead") == 0) {
 			NEXT_ARG();
-			if (get_u8(&overhead, *argv, 10)) {
+			if (get_u16(&overhead, *argv, 10)) {
 				explain1("overhead"); return -1;
+			}
+		} else if (matches(*argv, "linklayer") == 0) {
+			NEXT_ARG();
+			if (get_linklayer(&linklayer, *argv)) {
+				explain1("linklayer"); return -1;
 			}
 		} else if (matches(*argv, "quantum") == 0) {
 			NEXT_ARG();
@@ -206,23 +213,23 @@ static int htb_parse_class_opt(struct qdisc_util *qu, int argc, char **argv, str
 	if (!buffer) buffer = opt.rate.rate / get_hz() + mtu;
 	if (!cbuffer) cbuffer = opt.ceil.rate / get_hz() + mtu;
 
-/* encode overhead and mpu, 8 bits each, into lower 16 bits */
-	mpu = (unsigned)mpu8 | (unsigned)overhead << 8;
-	opt.ceil.mpu = mpu; opt.rate.mpu = mpu;
+	opt.ceil.overhead = overhead;
+	opt.rate.overhead = overhead;
 
-	if ((cell_log = tc_calc_rtable(opt.rate.rate, rtab, cell_log, mtu, mpu)) < 0) {
+	opt.ceil.mpu = mpu;
+	opt.rate.mpu = mpu;
+
+	if (tc_calc_rtable(&opt.rate, rtab, cell_log, mtu, linklayer) < 0) {
 		fprintf(stderr, "htb: failed to calculate rate table.\n");
 		return -1;
 	}
 	opt.buffer = tc_calc_xmittime(opt.rate.rate, buffer);
-	opt.rate.cell_log = cell_log;
 
-	if ((ccell_log = tc_calc_rtable(opt.ceil.rate, ctab, cell_log, mtu, mpu)) < 0) {
+	if (tc_calc_rtable(&opt.ceil, ctab, ccell_log, mtu, linklayer) < 0) {
 		fprintf(stderr, "htb: failed to calculate ceil rate table.\n");
 		return -1;
 	}
 	opt.cbuffer = tc_calc_xmittime(opt.ceil.rate, cbuffer);
-	opt.ceil.cell_log = ccell_log;
 
 	tail = NLMSG_TAIL(n);
 	addattr_l(n, 1024, TCA_OPTIONS, NULL, 0);

@@ -34,15 +34,27 @@ priority filtertype
 .B flowid
 flow-id
 
-.B tc [-s | -d ] qdisc show [ dev 
+.B tc
+.RI "[ " FORMAT " ]"
+.B qdisc show [ dev 
 DEV 
 .B  ]
 .P
-.B tc [-s | -d ] class show dev 
+.B tc 
+.RI "[ " FORMAT " ]"
+.B class show dev 
 DEV 
 .P
 .B tc filter show dev 
 DEV 
+
+.ti -8
+.IR FORMAT " := {"
+\fB\-s\fR[\fItatistics\fR] |
+\fB\-d\fR[\fIetails\fR] |
+\fB\-r\fR[\fIaw\fR] |
+\fB\-p\fR[\fIretty\fR] |
+\fB\i\fR[\fIec\fR] }
 
 .SH DESCRIPTION
 .B Tc
@@ -202,8 +214,7 @@ qdiscs will use all three:
 tc filters
 If tc filters are attached to a class, they are consulted first 
 for relevant instructions. Filters can match on all fields of a packet header, 
-as well as on the firewall mark applied by ipchains or iptables. See 
-.BR tc-filters (8).
+as well as on the firewall mark applied by ipchains or iptables. 
 .TP
 Type of Service
 Some qdiscs have built in rules for classifying packets based on the TOS field.
@@ -242,8 +253,7 @@ qdiscs applies.
 .TP 
 FILTERS
 Filters have a three part ID, which is only needed when using a hashed
-filter hierarchy, for which see
-.BR tc-filters (8).
+filter hierarchy.
 .SH UNITS
 All parameters accept a floating point number, possibly followed by a unit.
 .P
@@ -327,6 +337,29 @@ it is created.
 link
 Only available for qdiscs and performs a replace where the node 
 must exist already.
+
+.SH FORMAT
+The show command has additional formatting options:
+
+.TP
+.BR "\-s" , " \-stats", " \-statistics"
+output more statistics about packet usage.
+
+.TP
+.BR "\-d", " \-details"
+output more detailed information about rates and cell sizes.
+
+.TP
+.BR "\-r", " \-raw"
+output raw hex values for handles.
+
+.TP
+.BR "\-p", " \-pretty"
+decode filter offset and mask values to equivalent filter commands based on TCP/IP.
+
+.TP
+.BR "\-iec"
+print rates in IEC units (ie. 1K = 1024).
 
 
 .SH HISTORY

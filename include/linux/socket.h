@@ -22,8 +22,8 @@ struct __kernel_sockaddr_storage {
 #include <linux/sockios.h>		/* the SIOCxxx I/O controls	*/
 #include <linux/uio.h>			/* iovec support		*/
 #include <linux/types.h>		/* pid_t			*/
+		/* 		*/
 
-extern int sysctl_somaxconn;
 #ifdef CONFIG_PROC_FS
 struct seq_file;
 extern void socket_seq_show(struct seq_file *seq);
@@ -105,7 +105,7 @@ struct cmsghdr {
 #if    defined(__GNUC__) 
 #define __KINLINE static __inline__
 #elif defined(__cplusplus)
-#define __KINLINE static inline
+#define __KINLINE static __inline__
 #else
 #define __KINLINE static
 #endif
@@ -182,11 +182,14 @@ struct ucred {
 #define AF_PPPOX	24	/* PPPoX sockets		*/
 #define AF_WANPIPE	25	/* Wanpipe API Sockets */
 #define AF_LLC		26	/* Linux LLC			*/
+#define AF_CAN		29	/* Controller Area Network      */
 #define AF_TIPC		30	/* TIPC sockets			*/
 #define AF_BLUETOOTH	31	/* Bluetooth sockets 		*/
 #define AF_IUCV		32	/* IUCV sockets			*/
 #define AF_RXRPC	33	/* RxRPC sockets 		*/
-#define AF_MAX		34	/* For now.. */
+#define AF_ISDN		34	/* mISDN sockets 		*/
+#define AF_PHONET	35	/* Phonet sockets		*/
+#define AF_MAX		36	/* For now.. */
 
 /* Protocol families, same as address families. */
 #define PF_UNSPEC	AF_UNSPEC
@@ -217,10 +220,13 @@ struct ucred {
 #define PF_PPPOX	AF_PPPOX
 #define PF_WANPIPE	AF_WANPIPE
 #define PF_LLC		AF_LLC
+#define PF_CAN		AF_CAN
 #define PF_TIPC		AF_TIPC
 #define PF_BLUETOOTH	AF_BLUETOOTH
 #define PF_IUCV		AF_IUCV
 #define PF_RXRPC	AF_RXRPC
+#define PF_ISDN		AF_ISDN
+#define PF_PHONET	AF_PHONET
 #define PF_MAX		AF_MAX
 
 /* Maximum queue length specifiable by listen.  */
@@ -288,6 +294,8 @@ struct ucred {
 #define SOL_TIPC	271
 #define SOL_RXRPC	272
 #define SOL_PPPOL2TP	273
+#define SOL_BLUETOOTH	274
+#define SOL_PNPIPE	275
 
 /* IPX options */
 #define IPX_TYPE	1

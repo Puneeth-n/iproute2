@@ -46,7 +46,7 @@ typedef struct
 	__u8 bytelen;
 	__s16 bitlen;
 	__u32 flags;
-	__u32 data[4];
+	__u32 data[8];
 } inet_prefix;
 
 #define PREFIXLEN_SPECIFIED 1
@@ -74,6 +74,7 @@ extern int get_addr_1(inet_prefix *dst, const char *arg, int family);
 extern int get_prefix_1(inet_prefix *dst, char *arg, int family);
 extern int get_addr(inet_prefix *dst, const char *arg, int family);
 extern int get_prefix(inet_prefix *dst, char *arg, int family);
+extern int mask2bits(__u32 netmask);
 
 extern int get_integer(int *val, const char *arg, int base);
 extern int get_unsigned(unsigned *val, const char *arg, int base);
@@ -144,7 +145,10 @@ int print_timestamp(FILE *fp);
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
 extern int cmdlineno;
-extern size_t getcmdline(char **line, size_t *len, FILE *in);
+extern ssize_t getcmdline(char **line, size_t *len, FILE *in);
 extern int makeargs(char *line, char *argv[], int maxargs);
 
+struct iplink_req;
+int iplink_parse(int argc, char **argv, struct iplink_req *req,
+		char **name, char **type, char **link, char **dev);
 #endif /* __UTILS_H__ */

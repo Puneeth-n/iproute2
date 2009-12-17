@@ -1,6 +1,7 @@
 #ifndef _LINUX_IF_LINK_H
 #define _LINUX_IF_LINK_H
 
+#include <linux/types.h>
 #include <linux/netlink.h>
 
 /* The struct should be in sync with struct net_device_stats */
@@ -78,6 +79,8 @@ enum
 	IFLA_LINKMODE,
 	IFLA_LINKINFO,
 #define IFLA_LINKINFO IFLA_LINKINFO
+	IFLA_NET_NS_PID,
+	IFLA_IFALIAS,
 	__IFLA_MAX
 };
 

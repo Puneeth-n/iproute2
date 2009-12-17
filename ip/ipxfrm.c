@@ -154,7 +154,8 @@ const char *strxf_xfrmproto(__u8 proto)
 
 static const struct typeent algo_types[]= {
 	{ "enc", XFRMA_ALG_CRYPT }, { "auth", XFRMA_ALG_AUTH },
-	{ "comp", XFRMA_ALG_COMP }, { NULL, -1 }
+	{ "comp", XFRMA_ALG_COMP }, { "aead", XFRMA_ALG_AEAD },
+	{ NULL, -1 }
 };
 
 int xfrm_algotype_getbyname(char *name)
@@ -282,7 +283,7 @@ void xfrm_id_info_print(xfrm_address_t *saddr, struct xfrm_id *id,
 	char abuf[256];
 
 	if (title)
-		fprintf(fp, title);
+		fputs(title, fp);
 
 	memset(abuf, '\0', sizeof(abuf));
 	fprintf(fp, "src %s ", rt_addr_n2a(family, sizeof(*saddr),
@@ -293,7 +294,7 @@ void xfrm_id_info_print(xfrm_address_t *saddr, struct xfrm_id *id,
 	fprintf(fp, "%s", _SL_);
 
 	if (prefix)
-		fprintf(fp, prefix);
+		fputs(prefix, fp);
 	fprintf(fp, "\t");
 
 	fprintf(fp, "proto %s ", strxf_xfrmproto(id->proto));
@@ -349,12 +350,12 @@ static const char *strxf_limit(__u64 limit)
 void xfrm_stats_print(struct xfrm_stats *s, FILE *fp, const char *prefix)
 {
 	if (prefix)
-		fprintf(fp, prefix);
+		fputs(prefix, fp);
 	fprintf(fp, "stats:");
 	fprintf(fp, "%s", _SL_);
 
 	if (prefix)
-		fprintf(fp, prefix);
+		fputs(prefix, fp);
 	fprintf(fp, "  ");
 	fprintf(fp, "replay-window %u ", s->replay_window);
 	fprintf(fp, "replay %u ", s->replay);
@@ -390,12 +391,12 @@ void xfrm_lifetime_print(struct xfrm_lifetime_cfg *cfg,
 {
 	if (cfg) {
 		if (prefix)
-			fprintf(fp, prefix);
+			fputs(prefix, fp);
 		fprintf(fp, "lifetime config:");
 		fprintf(fp, "%s", _SL_);
 
 		if (prefix)
-			fprintf(fp, prefix);
+			fputs(prefix, fp);
 		fprintf(fp, "  ");
 		fprintf(fp, "limit: ");
 		fprintf(fp, "soft ");
@@ -406,7 +407,7 @@ void xfrm_lifetime_print(struct xfrm_lifetime_cfg *cfg,
 		fprintf(fp, "%s", _SL_);
 
 		if (prefix)
-			fprintf(fp, prefix);
+			fputs(prefix, fp);
 		fprintf(fp, "  ");
 		fprintf(fp, "limit: ");
 		fprintf(fp, "soft ");
@@ -417,7 +418,7 @@ void xfrm_lifetime_print(struct xfrm_lifetime_cfg *cfg,
 		fprintf(fp, "%s", _SL_);
 
 		if (prefix)
-			fprintf(fp, prefix);
+			fputs(prefix, fp);
 		fprintf(fp, "  ");
 		fprintf(fp, "expire add: ");
 		fprintf(fp, "soft ");
@@ -428,7 +429,7 @@ void xfrm_lifetime_print(struct xfrm_lifetime_cfg *cfg,
 		fprintf(fp, "%s", _SL_);
 
 		if (prefix)
-			fprintf(fp, prefix);
+			fputs(prefix, fp);
 		fprintf(fp, "  ");
 		fprintf(fp, "expire use: ");
 		fprintf(fp, "soft ");
@@ -440,19 +441,19 @@ void xfrm_lifetime_print(struct xfrm_lifetime_cfg *cfg,
 	}
 	if (cur) {
 		if (prefix)
-			fprintf(fp, prefix);
+			fputs(prefix, fp);
 		fprintf(fp, "lifetime current:");
 		fprintf(fp, "%s", _SL_);
 
 		if (prefix)
-			fprintf(fp, prefix);
+			fputs(prefix, fp);
 		fprintf(fp, "  ");
 		fprintf(fp, "%llu(bytes), ", (unsigned long long) cur->bytes);
 		fprintf(fp, "%llu(packets)", (unsigned long long) cur->packets);
 		fprintf(fp, "%s", _SL_);
 
 		if (prefix)
-			fprintf(fp, prefix);
+			fputs(prefix, fp);
 		fprintf(fp, "  ");
 		fprintf(fp, "add %s ", strxf_time(cur->add_time));
 		fprintf(fp, "use %s", strxf_time(cur->use_time));
@@ -473,7 +474,7 @@ void xfrm_selector_print(struct xfrm_selector *sel, __u16 family,
 		f = preferred_family;
 
 	if (prefix)
-		fprintf(fp, prefix);
+		fputs(prefix, fp);
 
 	memset(abuf, '\0', sizeof(abuf));
 	fprintf(fp, "src %s/%u ", rt_addr_n2a(f, sizeof(sel->saddr),
@@ -525,14 +526,14 @@ void xfrm_selector_print(struct xfrm_selector *sel, __u16 family,
 	fprintf(fp, "%s", _SL_);
 }
 
-static void xfrm_algo_print(struct xfrm_algo *algo, int type, int len,
-			    FILE *fp, const char *prefix)
+static void __xfrm_algo_print(struct xfrm_algo *algo, int type, int len,
+			      FILE *fp, const char *prefix, int newline)
 {
 	int keylen;
 	int i;
 
 	if (prefix)
-		fprintf(fp, prefix);
+		fputs(prefix, fp);
 
 	fprintf(fp, "%s ", strxf_algotype(type));
 
@@ -558,6 +559,32 @@ static void xfrm_algo_print(struct xfrm_algo *algo, int type, int len,
 		fprintf(fp, " (%d bits)", algo->alg_key_len);
 
  fin:
+	if (newline)
+		fprintf(fp, "%s", _SL_);
+}
+
+static inline void xfrm_algo_print(struct xfrm_algo *algo, int type, int len,
+				   FILE *fp, const char *prefix)
+{
+	return __xfrm_algo_print(algo, type, len, fp, prefix, 1);
+}
+
+static void xfrm_aead_print(struct xfrm_algo_aead *algo, int len,
+			    FILE *fp, const char *prefix)
+{
+	struct {
+		struct xfrm_algo algo;
+		char key[algo->alg_key_len / 8];
+	} base;
+
+	memcpy(base.algo.alg_name, algo->alg_name, sizeof(base.algo.alg_name));
+	base.algo.alg_key_len = algo->alg_key_len;
+	memcpy(base.algo.alg_key, algo->alg_key, algo->alg_key_len / 8);
+
+	__xfrm_algo_print(&base.algo, XFRMA_ALG_AEAD, len, fp, prefix, 0);
+
+	fprintf(fp, " %d", algo->alg_icv_len);
+
 	fprintf(fp, "%s", _SL_);
 }
 
@@ -569,7 +596,7 @@ static void xfrm_tmpl_print(struct xfrm_user_tmpl *tmpls, int len,
 
 	if (ntmpls <= 0) {
 		if (prefix)
-			fprintf(fp, prefix);
+			fputs(prefix, fp);
 		fprintf(fp, "(ERROR \"tmpl\" truncated)");
 		fprintf(fp, "%s", _SL_);
 		return;
@@ -579,14 +606,14 @@ static void xfrm_tmpl_print(struct xfrm_user_tmpl *tmpls, int len,
 		struct xfrm_user_tmpl *tmpl = &tmpls[i];
 
 		if (prefix)
-			fprintf(fp, prefix);
+			fputs(prefix, fp);
 
 		xfrm_id_info_print(&tmpl->saddr, &tmpl->id, tmpl->mode,
 				   tmpl->reqid, family, 0, fp, prefix, "tmpl ");
 
 		if (show_stats > 0 || tmpl->optional) {
 			if (prefix)
-				fprintf(fp, prefix);
+				fputs(prefix, fp);
 			fprintf(fp, "\t");
 			switch (tmpl->optional) {
 			case 0:
@@ -609,7 +636,7 @@ static void xfrm_tmpl_print(struct xfrm_user_tmpl *tmpls, int len,
 
 		if (show_stats > 0) {
 			if (prefix)
-				fprintf(fp, prefix);
+				fputs(prefix, fp);
 			fprintf(fp, "\t");
 			fprintf(fp, "%s-mask %s ",
 				strxf_algotype(XFRMA_ALG_CRYPT),
@@ -635,6 +662,12 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family,
 				XFRMA_ALG_AUTH, RTA_PAYLOAD(rta), fp, prefix);
 	}
 
+	if (tb[XFRMA_ALG_AEAD]) {
+		struct rtattr *rta = tb[XFRMA_ALG_AEAD];
+		xfrm_aead_print((struct xfrm_algo_aead *)RTA_DATA(rta),
+				RTA_PAYLOAD(rta), fp, prefix);
+	}
+
 	if (tb[XFRMA_ALG_CRYPT]) {
 		struct rtattr *rta = tb[XFRMA_ALG_CRYPT];
 		xfrm_algo_print((struct xfrm_algo *) RTA_DATA(rta),
@@ -652,7 +685,7 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family,
 		char abuf[256];
 
 		if (prefix)
-			fprintf(fp, prefix);
+			fputs(prefix, fp);
 		fprintf(fp, "encap ");
 
 		if (RTA_PAYLOAD(tb[XFRMA_ENCAP]) < sizeof(*e)) {
@@ -695,7 +728,7 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family,
 		xfrm_address_t *coa;
 
 		if (prefix)
-			fprintf(fp, prefix);
+			fputs(prefix, fp);
 		fprintf(fp, "coa ");
 
 		coa = (xfrm_address_t *)RTA_DATA(tb[XFRMA_COADDR]);
@@ -717,7 +750,7 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family,
 		__u64 lastused;
 
 		if (prefix)
-			fprintf(fp, prefix);
+			fputs(prefix, fp);
 		fprintf(fp, "lastused ");
 
 		if (RTA_PAYLOAD(tb[XFRMA_LASTUSED]) < sizeof(lastused)) {
@@ -759,7 +792,7 @@ void xfrm_state_info_print(struct xfrm_usersa_info *xsinfo,
 		STRBUF_CAT(buf, prefix);
 	STRBUF_CAT(buf, "\t");
 
-	fprintf(fp, buf);
+	fputs(buf, fp);
 	fprintf(fp, "replay-window %u ", xsinfo->replay_window);
 	if (show_stats > 0)
 		fprintf(fp, "seq 0x%08u ", xsinfo->seq);
@@ -809,7 +842,7 @@ void xfrm_policy_info_print(struct xfrm_userpolicy_info *xpinfo,
 		STRBUF_CAT(buf, prefix);
 	STRBUF_CAT(buf, "\t");
 
-	fprintf(fp, buf);
+	fputs(buf, fp);
 	fprintf(fp, "dir ");
 	switch (xpinfo->dir) {
 	case XFRM_POLICY_IN:

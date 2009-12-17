@@ -26,7 +26,7 @@ typedef __kernel_mqd_t		mqd_t;
 typedef __kernel_uid_t		uid_t;
 typedef __kernel_gid_t		gid_t;
 
-#if defined(__GNUC__) && !defined(__STRICT_ANSI__)
+#if defined(__GNUC__)
 typedef __kernel_loff_t		loff_t;
 #endif
 
@@ -92,14 +92,14 @@ typedef		__u8		uint8_t;
 typedef		__u16		uint16_t;
 typedef		__u32		uint32_t;
 
-#if defined(__GNUC__) && !defined(__STRICT_ANSI__)
+#if defined(__GNUC__)
 typedef		__u64		uint64_t;
 typedef		__u64		u_int64_t;
 typedef		__s64		int64_t;
 #endif
 
 /* this is a special 64bit data type that is 8-byte aligned */
-#define aligned_u64 unsigned long long __attribute__((aligned(8)))
+#define aligned_u64 __u64 __attribute__((aligned(8)))
 #define aligned_be64 __be64 __attribute__((aligned(8)))
 #define aligned_le64 __le64 __attribute__((aligned(8)))
 
@@ -108,19 +108,14 @@ typedef		__s64		int64_t;
  *
  * Linux always considers sectors to be 512 bytes long independently
  * of the devices real block size.
+ *
+ * blkcnt_t is the type of the inode's block count.
  */
 #ifdef CONFIG_LBD
 typedef u64 sector_t;
-#else
-typedef unsigned long sector_t;
-#endif
-
-/*
- * The type of the inode's block count.
- */
-#ifdef CONFIG_LSF
 typedef u64 blkcnt_t;
 #else
+typedef unsigned long sector_t;
 typedef unsigned long blkcnt_t;
 #endif
 
@@ -154,19 +149,11 @@ typedef __u16 __bitwise __le16;
 typedef __u16 __bitwise __be16;
 typedef __u32 __bitwise __le32;
 typedef __u32 __bitwise __be32;
-#if defined(__GNUC__) && !defined(__STRICT_ANSI__)
 typedef __u64 __bitwise __le64;
 typedef __u64 __bitwise __be64;
-#endif
+
 typedef __u16 __bitwise __sum16;
 typedef __u32 __bitwise __wsum;
 
-
-struct ustat {
-	__kernel_daddr_t	f_tfree;
-	__kernel_ino_t		f_tinode;
-	char			f_fname[6];
-	char			f_fpack[6];
-};
 
 #endif /* _LINUX_TYPES_H */

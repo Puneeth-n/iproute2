@@ -72,7 +72,7 @@ static void usage(void)
 	fprintf(stderr, "OPTIONS := FLAGS [ mtu NUMBER ] [ advmss NUMBER ]\n");
 	fprintf(stderr, "           [ rtt TIME ] [ rttvar TIME ]\n");
 	fprintf(stderr, "           [ window NUMBER] [ cwnd NUMBER ] [ initcwnd NUMBER ]\n");
-	fprintf(stderr, "           [ ssthresh NUMBER ] [ realms REALM ]\n");
+	fprintf(stderr, "           [ ssthresh NUMBER ] [ realms REALM ] [ src ADDRESS ]\n");
 	fprintf(stderr, "           [ rto_min TIME ]\n");
 	fprintf(stderr, "TYPE := [ unicast | local | broadcast | multicast | throw |\n");
 	fprintf(stderr, "          unreachable | prohibit | blackhole | nat ]\n");
@@ -112,8 +112,8 @@ static struct
 
 static int flush_update(void)
 {
-	if (rtnl_send(&rth, filter.flushb, filter.flushp) < 0) {
-		perror("Failed to send flush request\n");
+	if (rtnl_send_check(&rth, filter.flushb, filter.flushp) < 0) {
+		perror("Failed to send flush request");
 		return -1;
 	}
 	filter.flushp = 0;
@@ -493,6 +493,8 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 			mxlock = *(unsigned*)RTA_DATA(mxrta[RTAX_LOCK]);
 
 		for (i=2; i<= RTAX_MAX; i++) {
+			unsigned val;
+
 			if (mxrta[i] == NULL)
 				continue;
 			if (!hz)
@@ -505,21 +507,31 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 			if (mxlock & (1<<i))
 				fprintf(fp, " lock");
 
-			if (i != RTAX_RTT && i != RTAX_RTTVAR &&
-			    i != RTAX_RTO_MIN)
-				fprintf(fp, " %u", *(unsigned*)RTA_DATA(mxrta[i]));
-			else {
-				unsigned val = *(unsigned*)RTA_DATA(mxrta[i]);
+			val = *(unsigned*)RTA_DATA(mxrta[i]);
+			switch (i) {
+			case RTAX_HOPLIMIT:
+				if ((long)val == -1)
+					val = 0;
+				/* fall through */
+			default:
+				fprintf(fp, " %u", val);
+				break;
 
+			case RTAX_RTT:
+			case RTAX_RTTVAR:
+			case RTAX_RTO_MIN:
 				val *= 1000;
 				if (i == RTAX_RTT)
 					val /= 8;
 				else if (i == RTAX_RTTVAR)
 					val /= 4;
+
 				if (val >= hz)
-					fprintf(fp, " %ums", val/hz);
+					fprintf(fp, " %llums",
+						(unsigned long long) val / hz);
 				else
-					fprintf(fp, " %.2fms", (float)val/hz);
+					fprintf(fp, " %.2fms", 
+						(double)val / hz);
 			}
 		}
 	}
@@ -1209,11 +1221,12 @@ static int iproute_list_or_flush(int argc, char **argv, int flush)
 				exit(1);
 			}
 			if (filter.flushed == 0) {
-				if (round == 0) {
-					if (!filter.cloned || do_ipv6 == AF_INET6)
-						fprintf(stderr, "Nothing to flush.\n");
-				} else if (show_stats)
-					printf("*** Flush is complete after %d round%s ***\n", round, round>1?"s":"");
+				if (show_stats) {
+					if (round == 0 && (!filter.cloned || do_ipv6 == AF_INET6))
+						printf("Nothing to flush.\n");
+					else
+						printf("*** Flush is complete after %d round%s ***\n", round, round>1?"s":"");
+				}
 				fflush(stdout);
 				return 0;
 			}
