@@ -34,7 +34,7 @@ static void explain(void)
 "                 [ drop PERCENT [CORRELATION] ]\n" \
 "                 [ corrupt PERCENT [CORRELATION] ]\n" \
 "                 [ duplicate PERCENT [CORRELATION] ]\n" \
-"                 [ ( reorder PRECENT [CORRELATION] | gap DISTANCE ) reorderdelay TIME [JITTER [CORRELATION]] ]\n" \
+"                 [ ( reorder PRECENT [CORRELATION] | gap MINDISTANCE ) reorderdelay TIME [JITTER [CORRELATION]] ]\n" \
 );
 }
 
@@ -285,7 +285,7 @@ static int netem_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 
 	if (reorder.probability) {
 		if (opt.gap == 0)
-			opt.gap = 1; /* set minimum gap between reorders to 1 */
+			opt.gap = 1; /* set minimum reorder gap to 1 */
 	} else {
 		if ( opt.gap == 0 && opt.reorderdelay > 0) {
 			fprintf(stderr, "reorderdelay specified without reorder probability or gap\n");
@@ -294,8 +294,8 @@ static int netem_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 		}
 	}
 
-	if (dist_data && (opt.latency == 0 || opt.jitter == 0)) {
-		fprintf(stderr, "distribution specified but no latency and jitter values\n");
+	if (dist_data && opt.jitter == 0 && opt.reorderjitter == 0) {
+		fprintf(stderr, "distribution specified but no delay or reorderdelay jitter values\n");
 		explain();
 		return -1;
 	}
