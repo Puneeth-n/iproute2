@@ -294,7 +294,7 @@ static int netem_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 		}
 	}
 
-	if (dist_data && opt.jitter == 0 && opt.reorderjitter == 0) {
+	if (dist_data && opt.jitter == 0 && opt.reorderdelayjitter == 0) {
 		fprintf(stderr, "distribution specified but no delay or reorderdelay jitter values\n");
 		explain();
 		return -1;
