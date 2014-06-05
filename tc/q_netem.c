@@ -39,7 +39,7 @@ static void explain(void)
 "                 [ loss state P13 [P31 [P32 [P23 P14]]]\n" \
 "                 [ loss gemodel PERCENT [R [1-H [1-K]]]\n" \
 "                 [ ecn ]\n" \
-"                 [ reorder PRECENT [CORRELATION] [ gap DISTANCE ]]\n" \
+"                 [ reorder PERCENT [CORRELATION] | gap MIN-DISTANCE reorderdelay TIME [JITTER [CORRELATION]] ]\n" \
 "                 [ rate RATE [PACKETOVERHEAD] [CELLSIZE] [CELLOVERHEAD]]\n");
 }
 
@@ -359,6 +359,29 @@ static int netem_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 					return -1;
 				}
 			}
+
+		} else if  (matches(*argv, "reorderdelay") == 0) {
+                        NEXT_ARG();
+                        if (get_ticks(&opt.reorderdelay, *argv)) {
+                                explain1("reorderdelay");
+                                return -1;
+                        }
+                        if (NEXT_IS_NUMBER()) {
+                                NEXT_ARG();
+                                if (get_ticks(&opt.reorderdelayjitter, *argv)) {
+                                        explain1("reorderdelay");
+                                        return -1;
+                                }
+				if (NEXT_IS_NUMBER()) {
+                                        NEXT_ARG();
+                                        ++present[TCA_NETEM_CORR];
+                                        if (get_percent(&cor.reorderdelay_corr, *argv)) {
+                                                explain1("reorderdelay");
+                                                return -1;
+                                        }
+                                }
+			}
+
 		} else if (matches(*argv, "corrupt") == 0) {
 			NEXT_ARG();
 			present[TCA_NETEM_CORRUPT] = 1;
@@ -442,17 +465,14 @@ static int netem_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 	tail = NLMSG_TAIL(n);
 
 	if (reorder.probability) {
-		if (opt.latency == 0) {
-			fprintf(stderr, "reordering not possible without specifying some delay\n");
+		if (opt.gap == 0)
+			opt.gap = 1; /* set minimum reorder gap to 1 */
+	} else {
+		if ( opt.gap == 0 && opt.reorderdelay > 0) {
+			fprintf(stderr, "reorderdelay specified without reorder probability or gap\n");
 			explain();
 			return -1;
 		}
-		if (opt.gap == 0)
-			opt.gap = 1;
-	} else if (opt.gap > 0) {
-		fprintf(stderr, "gap specified without reorder probability\n");
-		explain();
-		return -1;
 	}
 
 	if (present[TCA_NETEM_ECN]) {
@@ -463,8 +483,8 @@ static int netem_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 		}
 	}
 
-	if (dist_data && (opt.latency == 0 || opt.jitter == 0)) {
-		fprintf(stderr, "distribution specified but no latency and jitter values\n");
+	if (dist_data && opt.jitter == 0 && opt.reorderdelayjitter == 0) {
+		fprintf(stderr, "distribution specified but no delay or reorderdelay jitter values\n");
 		explain();
 		return -1;
 	}
@@ -505,7 +525,7 @@ static int netem_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 			fprintf(stderr, "loss in the weeds!\n");
 			return -1;
 		}
-		
+
 		addattr_nest_end(n, start);
 	}
 
@@ -584,7 +604,7 @@ static int netem_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 				gimodel = RTA_DATA(lb[NETEM_LOSS_GI]);
 			if (lb[NETEM_LOSS_GE])
 				gemodel = RTA_DATA(lb[NETEM_LOSS_GE]);
-		}			
+		}
 		if (tb[TCA_NETEM_RATE]) {
 			if (RTA_PAYLOAD(tb[TCA_NETEM_RATE]) < sizeof(*rate))
 				return -1;
@@ -603,6 +623,10 @@ static int netem_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	}
 
 	fprintf(f, "limit %d", qopt.limit);
+
+	if (qopt.reorderdelay) {
+		fprintf(f, " reorderdelay %s", sprint_ticks(qopt.reorderdelay, b1) );
+	}
 
 	if (qopt.latency) {
 		fprintf(f, " delay %s", sprint_ticks(qopt.latency, b1));
