@@ -189,6 +189,12 @@ struct tcp_info {
 
 	__u64	tcpi_pacing_rate;
 	__u64	tcpi_max_pacing_rate;
+
+	/* Congestion and Reordering related counters */
+	__u32	tcpi_total_fast_retrans;
+	__u32	tcpi_total_rto_retrans;
+	__u32   tcpi_total_dsacks;
+	__u32	tcpi_last_reor_sample;
 };
 
 /* for TCP_MD5SIG socket option */

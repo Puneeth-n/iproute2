@@ -1752,6 +1752,14 @@ static void tcp_show_info(const struct nlmsghdr *nlh, struct inet_diag_msg *r,
 		if (info->tcpi_retrans || info->tcpi_total_retrans)
 			printf(" retrans:%u/%u", info->tcpi_retrans,
 			       info->tcpi_total_retrans);
+		if (info->tcpi_total_fast_retrans)
+			printf(" fast_retrans:%u", info->tcpi_total_fast_retrans);
+		if (info->tcpi_total_rto_retrans)
+			printf(" rto_retrans:%u", info->tcpi_total_rto_retrans);
+		if (info->tcpi_total_dsacks)
+			printf(" dsacks:%u", info->tcpi_total_dsacks);
+		if (info->tcpi_last_reor_sample)
+			printf(" last_reorder:%u", info->tcpi_last_reor_sample);
 		if (info->tcpi_lost)
 			printf(" lost:%u", info->tcpi_lost);
 		if (info->tcpi_sacked && r->idiag_state != SS_LISTEN)
